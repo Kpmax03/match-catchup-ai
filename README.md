@@ -97,41 +97,65 @@ With Docker Compose, only the frontend (`5173`) and backend (`8082`) are publish
 
 ---
 
-## 4. How to Run the Platform
+## 4. Deploy with Docker Compose
 
-### Run the published Docker images
+### Requirements
 
-Requirements: Docker Desktop with its Linux container engine running and internet access on the first start. The published app images are `kpmax03/dream11-discovery-service`, `kpmax03/dream11-match-score-generator`, `kpmax03/dream11-match-catchup-ai`, and `kpmax03/dream11-frontend`.
+- Docker Desktop (or Docker Engine with the Compose plugin), using Linux containers.
+- Internet access on the first run so Docker can pull the images and Ollama can download its models.
+- At least 8 GB of available memory is recommended for the `llama3.1:8b` chat model. The first model download is about 5 GB and can take a while on a slow connection.
+- Host ports `5173` and `8082` must be available.
 
-From the project root, create a private environment file and set your own secrets:
+The application images are published on Docker Hub under `kpmax03`: `dream11-discovery-service`, `dream11-match-score-generator`, `dream11-match-catchup-ai`, and `dream11-frontend`. The Compose file also pulls MySQL, pgvector, Redis, and Ollama images. Ollama downloads `llama3.1:8b` and `nomic-embed-text` into a persistent Docker volume during initial startup.
+
+### First-time setup
+
+Clone the public project repository and enter its folder. Replace the example URL with the actual GitHub repository URL:
+
+```powershell
+git clone https://github.com/<your-github-username>/<your-repository>.git
+cd <your-repository>
+```
+
+Create your local secrets file and edit the three values. Use strong, private values; the JWT secret should be at least 32 characters:
 
 ```powershell
 Copy-Item .env.example .env
 notepad .env
 ```
 
-Start the application:
+Start the full stack:
 
 ```powershell
 docker compose up -d
 ```
 
-Compose downloads the published app images and official dependency images. It also downloads the required Ollama models on first startup. Open the frontend at http://localhost:5173. Allow several minutes for the first startup and model download.
+Compose pulls the app and dependency images automatically. On first startup, allow time for the Ollama chat model and embedding model downloads. The model-pull containers will show as `Exited` after a successful download; this is expected. The backend and frontend start after the required models are available.
 
-Check service status and logs:
+Open the application at **http://localhost:5173**. To confirm services are running or inspect backend logs:
 
 ```powershell
 docker compose ps
 docker compose logs -f match-catchup-ai
 ```
 
-Stop the services while preserving database and model data:
+### Subsequent starts and shutdown
+
+Start the stack again:
+
+```powershell
+docker compose up -d
+```
+
+Stop containers while keeping database, Redis, and Ollama model data:
 
 ```powershell
 docker compose down
 ```
 
-Do not use `docker compose down -v` unless you intend to delete the persistent database and model volumes. Keep `.env` private; it is ignored by Git.
+Do not use `docker compose down -v` unless you intend to permanently remove the persistent database and model data. Keep `.env` private; it is ignored by Git. Each person deploying the project should create their own `.env` from `.env.example`.
+
+If Docker reports that port `5173` or `8082` is already allocated, another application or container is using that host port. Stop that service/container or change the published port in `compose.yaml` before starting this stack.
 
 ### Build and publish updated app images
 
