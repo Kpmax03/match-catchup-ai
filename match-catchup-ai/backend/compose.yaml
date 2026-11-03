@@ -1,0 +1,21 @@
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: matchcatchup-pgvector
+    environment:
+      POSTGRES_DB: match_catchup_vector
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - matchcatchup-pgvector-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d match_catchup_vector"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  matchcatchup-pgvector-data:

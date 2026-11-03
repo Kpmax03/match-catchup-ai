@@ -1,0 +1,5 @@
+com\matchcatchup\JwtServiceTest.class
+com\matchcatchup\CollectionServiceTest.class
+com\matchcatchup\MatchCatchupApplicationTests.class
+com\matchcatchup\ActivityServiceTest.class
+com\matchcatchup\service\RagChatServiceTest.class
