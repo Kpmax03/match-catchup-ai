@@ -1,0 +1,126 @@
+services:
+  mysql:
+    image: mysql:8.0
+    pull_policy: never
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: score_generator_service
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  pgvector:
+    image: pgvector/pgvector:pg17
+    pull_policy: never
+    environment:
+      POSTGRES_DB: match_catchup_vector
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d match_catchup_vector"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    pull_policy: never
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    pull_policy: never
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+  discovery-service:
+    image: dream11-discovery-service:latest
+    pull_policy: never
+    restart: unless-stopped
+
+  match-score-generator:
+    image: dream11-match-score-generator:latest
+    pull_policy: never
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/score_generator_service
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    restart: unless-stopped
+
+  match-catchup-ai:
+    image: dream11-match-catchup-ai:latest
+    pull_policy: never
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/match_catchup_ai?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      MATCHCATCHUP_SCORE_GENERATOR_URL: http://match-score-generator:8081
+      MATCHCATCHUP_COLLECTOR_RESET_ON_STARTUP: "false"
+      MATCHCATCHUP_JWT_SECRET: ${MATCHCATCHUP_JWT_SECRET:?Set MATCHCATCHUP_JWT_SECRET in .env}
+      POSTGRES_VECTOR_URL: jdbc:postgresql://pgvector:5432/match_catchup_vector
+      POSTGRES_VECTOR_USERNAME: postgres
+      POSTGRES_VECTOR_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.1:8b
+      OLLAMA_EMBEDDING_MODEL: nomic-embed-text
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pgvector:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+      match-score-generator:
+        condition: service_started
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    image: dream11-frontend:latest
+    pull_policy: never
+    ports:
+      - "5173:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      match-catchup-ai:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  pgvector-data:
+  redis-data:
+  ollama-data:
+    name: matchcatchup-ollama-data

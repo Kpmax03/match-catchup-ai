@@ -1,0 +1,16 @@
+services:
+  discovery-service:
+    build:
+      context: ./discovery-service
+
+  match-score-generator:
+    build:
+      context: ./match-score-generator
+
+  match-catchup-ai:
+    build:
+      context: ./match-catchup-ai/backend
+
+  frontend:
+    build:
+      context: ./match-catchup-ai/frontend

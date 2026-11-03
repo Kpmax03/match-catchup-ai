@@ -49,9 +49,12 @@ dream11/
 | **Match Score Generator** | `8081` | Spring Boot 4.1.2 + MySQL | `match-score-generator` |
 | **MatchCatchup AI Backend** | `8082` | Spring Boot 4.1.2 + Spring Security + OpenFeign | `match-catchup-ai` |
 | **MatchCatchup AI Frontend** | `5173` | React 19 + Vite + TypeScript | Client SPA |
-| **MySQL Database** | `3307` | Relational Storage | DB: `match_catchup_ai` |
-| **Redis Cache** | `6379` | In-Memory Cache (TTL: 6h) | Key: `match:IND-AUS-001:live` |
-| **Ollama Local LLM** | `11434`| Model: `llama3.1:8b` | RAG Chatbot & Summary |
+| **MySQL Database** | `3306` (container network) | Relational Storage | DBs: `score_generator_service`, `match_catchup_ai` |
+| **Redis Cache** | `6379` (container network) | In-Memory Cache (TTL: 6h) | Key: `match:IND-AUS-001:live` |
+| **pgvector** | `5432` (container network) | Vector Storage | DB: `match_catchup_vector` |
+| **Ollama Local LLM** | `11434` (container network) | Models: `llama3.1:8b`, `nomic-embed-text` | RAG Chatbot & Summary |
+
+With Docker Compose, only the frontend (`5173`) and backend (`8082`) are published to the host. Other services communicate over the private Compose network.
 
 ---
 
@@ -96,31 +99,45 @@ dream11/
 
 ## 4. How to Run the Platform
 
-### Step 1: Start Discovery Service
-```powershell
-cd discovery-service
-.\mvnw.cmd spring-boot:run
-```
-*(Eureka dashboard: http://localhost:8761)*
+### Run the published Docker images
 
-### Step 2: Start Match Score Generator
-```powershell
-cd match-score-generator
-.\mvnw.cmd spring-boot:run
-```
-*(Runs on port 8081 and registers with Eureka)*
+Requirements: Docker Desktop with its Linux container engine running and internet access on the first start. The published app images are `kpmax03/dream11-discovery-service`, `kpmax03/dream11-match-score-generator`, `kpmax03/dream11-match-catchup-ai`, and `kpmax03/dream11-frontend`.
 
-### Step 3: Start MatchCatchup AI Backend
-```powershell
-cd match-catchup-ai\backend
-.\mvnw.cmd spring-boot:run
-```
-*(Runs on port 8082 with JWT authentication, Redis 6379, and 50s background collector)*
+From the project root, create a private environment file and set your own secrets:
 
-### Step 4: Start Frontend
 ```powershell
-cd match-catchup-ai\frontend
-npm install
-npm run dev
+Copy-Item .env.example .env
+notepad .env
 ```
-*(Runs on http://localhost:5173 with proxy to backend port 8082)*
+
+Start the application:
+
+```powershell
+docker compose up -d
+```
+
+Compose downloads the published app images and official dependency images. It also downloads the required Ollama models on first startup. Open the frontend at http://localhost:5173. Allow several minutes for the first startup and model download.
+
+Check service status and logs:
+
+```powershell
+docker compose ps
+docker compose logs -f match-catchup-ai
+```
+
+Stop the services while preserving database and model data:
+
+```powershell
+docker compose down
+```
+
+Do not use `docker compose down -v` unless you intend to delete the persistent database and model volumes. Keep `.env` private; it is ignored by Git.
+
+### Build and publish updated app images
+
+After logging in with `docker login`, build from the source and push only the four app services:
+
+```powershell
+docker compose -f compose.yaml -f compose.build.yaml build
+docker compose push discovery-service match-score-generator match-catchup-ai frontend
+```
